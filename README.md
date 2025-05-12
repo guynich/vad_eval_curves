@@ -38,6 +38,8 @@ python3 -m pip install -r requirements.txt
 
 # Run the test script
 
+Coded with help from ChatGPT and Copilot.
+
 ```console
 cd
 source ./venv_vad_eval_curves/bin/activate
