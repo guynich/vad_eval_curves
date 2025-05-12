@@ -1,10 +1,9 @@
-"""Test script for voice activity detection (VAD) using the Hugging Face dataset."""
+"""Test script for AUC curves for VAD model using Hugging Face hosted dataset."""
 
 import pprint
 
 import matplotlib.pyplot as plt
 import numpy as np
-import sounddevice as sd
 from datasets import load_dataset
 from sklearn.metrics import (
     average_precision_score,
@@ -18,23 +17,8 @@ from sklearn.metrics import (
 
 from speech_detector import SpeechDetector  # Silero VAD model
 
-# SAMPLE_RATE = 16000
 SPLITS = ["test.clean", "test.other"]
-# LATENCY = 0.5
-
 VAD_THRESHOLD = 0.5
-
-
-# def calculate_nested_mean(nested_list):
-#     """Calculate the mean of all items in a nested list structure."""
-#     return np.mean([item for sublist in nested_list for item in sublist])
-
-
-# def compute_auc(y_true, y_scores):
-#     # y_scores: model output probabilities or scores
-#     roc_auc = roc_auc_score(y_true, y_scores)
-#     pr_auc = average_precision_score(y_true, y_scores)
-#     return {"ROC AUC": roc_auc, "PR AUC": pr_auc}
 
 
 def compute_overall_auc(list_of_y_true, list_of_y_scores):
@@ -70,45 +54,55 @@ def evaluate_binary_classification(y_true, y_pred):
     }
 
 
-# def plot_overall_curves(list_of_y_true, list_of_y_scores):
-#     # Flatten all true labels and scores
-#     all_y_true = [label for sublist in list_of_y_true for label in sublist]
-#     all_y_scores = [score for sublist in list_of_y_scores for score in sublist]
+def plot_curves_with_thresholds_and_markers(
+    list_of_y_true, list_of_y_scores, split="", confidence="", max_labels=10
+):
+    # Flatten all true labels and scores
+    all_y_true = [label for sublist in list_of_y_true for label in sublist]
+    all_y_scores = [score for sublist in list_of_y_scores for score in sublist]
 
-#     # Compute ROC and PR curves
-#     fpr, tpr, _ = roc_curve(all_y_true, all_y_scores)
-#     precision, recall, _ = precision_recall_curve(all_y_true, all_y_scores)
+    # ROC curve
+    fpr, tpr, roc_thresholds = roc_curve(all_y_true, all_y_scores)
+    roc_auc = roc_auc_score(all_y_true, all_y_scores)
 
-#     # Compute AUCs
-#     roc_auc = roc_auc_score(all_y_true, all_y_scores)
-#     pr_auc = average_precision_score(all_y_true, all_y_scores)
+    # PR curve
+    precision, recall, pr_thresholds = precision_recall_curve(all_y_true, all_y_scores)
+    pr_auc = average_precision_score(all_y_true, all_y_scores)
 
-#     # Plot
-#     plt.figure(figsize=(12, 5))
+    # Plot
+    plt.figure(figsize=(14, 6))
 
-#     # ROC
-#     plt.subplot(1, 2, 1)
-#     plt.plot(fpr, tpr, label=f"ROC AUC = {roc_auc:.2f}")
-#     plt.plot([0, 1], [0, 1], "k--", label="Random")
-#     plt.xlabel("False Positive Rate")
-#     plt.ylabel("True Positive Rate")
-#     plt.title("Overall ROC Curve")
-#     plt.legend()
-#     plt.grid()
+    # ROC plot
+    plt.subplot(1, 2, 1)
+    plt.plot(fpr, tpr, label=f"ROC AUC = {roc_auc:.3f}", lw=2)
+    plt.plot([0, 1], [0, 1], "k--", label="Random")
 
-#     # PR
-#     plt.subplot(1, 2, 2)
-#     plt.plot(recall, precision, label=f"PR AUC = {pr_auc:.2f}")
-#     plt.xlabel("Recall")
-#     plt.ylabel("Precision")
-#     plt.title("Overall Precision-Recall Curve")
-#     plt.legend()
-#     plt.ylim([0.75, 1.])
-#     plt.grid()
+    # Annotate thresholds and mark points
+    annotate_threshold_markers(fpr, tpr, roc_thresholds)
 
-#     plt.tight_layout()
-#     plt.pause(0.5)
-#     plt.show(block=False)
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(f"{split}:  ROC Curve{confidence}")
+    plt.legend()
+    plt.grid()
+
+    # PR plot
+    plt.subplot(1, 2, 2)
+    plt.plot(recall, precision, label=f"PR AUC = {pr_auc:.3f}", lw=2)
+
+    # Annotate thresholds and mark points
+    annotate_threshold_markers(recall, precision, pr_thresholds)
+
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title(f"{split}:  Precision-Recall Curve{confidence}")
+    plt.ylim([0.75, 1.02])
+    plt.legend()
+    plt.grid()
+
+    plt.tight_layout()
+    plt.pause(0.5)
+    plt.show(block=False)
 
 
 def annotate_threshold_markers(
@@ -139,57 +133,6 @@ def annotate_threshold_markers(
             fontsize=8,
             ha="right",
         )
-
-
-def plot_curves_with_thresholds_and_markers(
-    list_of_y_true, list_of_y_scores, split="", confidence="", max_labels=10
-):
-    # Flatten all true labels and scores
-    all_y_true = [label for sublist in list_of_y_true for label in sublist]
-    all_y_scores = [score for sublist in list_of_y_scores for score in sublist]
-
-    # ROC curve
-    fpr, tpr, roc_thresholds = roc_curve(all_y_true, all_y_scores)
-    roc_auc = roc_auc_score(all_y_true, all_y_scores)
-
-    # PR curve
-    precision, recall, pr_thresholds = precision_recall_curve(all_y_true, all_y_scores)
-    pr_auc = average_precision_score(all_y_true, all_y_scores)
-
-    # Plot
-    plt.figure(figsize=(14, 6))
-
-    # ROC plot
-    plt.subplot(1, 2, 1)
-    plt.plot(fpr, tpr, label=f"ROC AUC = {roc_auc:.2f}", lw=2)
-    plt.plot([0, 1], [0, 1], "k--", label="Random")
-
-    # Annotate thresholds and mark points
-    annotate_threshold_markers(fpr, tpr, roc_thresholds)
-
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title(f"{split}:  ROC Curve{confidence}")
-    plt.legend()
-    plt.grid()
-
-    # PR plot
-    plt.subplot(1, 2, 2)
-    plt.plot(recall, precision, label=f"PR AUC = {pr_auc:.2f}", lw=2)
-
-    # Annotate thresholds and mark points
-    annotate_threshold_markers(recall, precision, pr_thresholds)
-
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title(f"{split}:  Precision-Recall Curve{confidence}")
-    plt.ylim([0.75, 1.02])
-    plt.legend()
-    plt.grid()
-
-    plt.tight_layout()
-    plt.pause(0.5)
-    plt.show(block=False)
 
 
 def process_audio(audio, speech_detector):
@@ -242,6 +185,7 @@ def main():
                 f"Example: [{index:04d}]  Split: {split}",  #  Ratio: {ratio:7.2%}  "
             )
             pprint.pprint(metrics)
+            print("Excluding low confidence:")
             pprint.pprint(metrics_confidence)
 
         results[split] = compute_overall_auc(all_speech, all_vad_probs)
@@ -260,8 +204,7 @@ def main():
             confidence=" (exclude low confidence)",
         )
 
-    pprint.pprint(results)
-
+    print("Press any key to quit.")
     input()
 
 
