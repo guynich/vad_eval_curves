@@ -71,12 +71,12 @@ for discussion.
 <img src="images/ROC_test_other_exclude_low_confidence.png" alt="AUC plots for test.clean excluding zero confidence data"/>
 
 ```
-{'test.clean': {'Overall PR AUC': np.float64(0.9916533637164553),
-                'Overall ROC AUC': np.float64(0.9749639873286956)},
- 'test.clean_confidence': {'Overall PR AUC': np.float64(0.9982586011226073),
-                           'Overall ROC AUC': np.float64(0.992260886130102)},
- 'test.other': {'Overall PR AUC': np.float64(0.9856187361132123),
-                'Overall ROC AUC': np.float64(0.9690341897727688)},
- 'test.other_confidence': {'Overall PR AUC': np.float64(0.9971949276641505),
-                           'Overall ROC AUC': np.float64(0.9914300840606078)}}
+{'test.clean': AUCMetrics(roc_auc=np.float64(0.9749639873286956),
+                          pr_auc=np.float64(0.9916533637164553)),
+ 'test.clean_confidence': AUCMetrics(roc_auc=np.float64(0.992260886130102),
+                                     pr_auc=np.float64(0.9982586011226073)),
+ 'test.other': AUCMetrics(roc_auc=np.float64(0.9690341897727688),
+                          pr_auc=np.float64(0.9856187361132123)),
+ 'test.other_confidence': AUCMetrics(roc_auc=np.float64(0.9914300840606078),
+                                     pr_auc=np.float64(0.9971949276641505))}
 ```

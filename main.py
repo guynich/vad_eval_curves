@@ -1,5 +1,7 @@
-"""Test script for AUC curves for VAD model using Hugging Face hosted dataset."""
+"""Evaluate VAD model performance using AUC curves with Hugging Face dataset."""
 
+from dataclasses import dataclass
+from typing import List
 import pprint
 
 import matplotlib.pyplot as plt
@@ -15,199 +17,180 @@ from sklearn.metrics import (
     roc_curve,
 )
 
-from speech_detector import SpeechDetector  # Silero VAD model
+from speech_detector import SpeechDetector
 
-SPLITS = ["test.clean", "test.other"]
-VAD_THRESHOLD = 0.5
+@dataclass
+class BinaryMetrics:
+    """Metrics for binary classification evaluation."""
+    true_positives: int
+    true_negatives: int
+    false_positives: int
+    false_negatives: int
+    precision: float
+    recall: float
+
+@dataclass
+class AUCMetrics:
+    """Area Under Curve metrics."""
+    roc_auc: float
+    pr_auc: float
 
 
-def compute_overall_auc(list_of_y_true, list_of_y_scores):
-    # Flatten all true labels and scores
-    all_y_true = [label for sublist in list_of_y_true for label in sublist]
-    all_y_scores = [score for sublist in list_of_y_scores for score in sublist]
+def compute_overall_auc(y_true: List[List[int]], y_scores: List[List[float]]) -> AUCMetrics:
+    """Compute ROC and PR AUC scores for flattened predictions."""
+    flat_true = np.concatenate(y_true)
+    flat_scores = np.concatenate(y_scores)
 
-    roc_auc = roc_auc_score(all_y_true, all_y_scores)
-    pr_auc = average_precision_score(all_y_true, all_y_scores)
+    return AUCMetrics(
+        roc_auc=roc_auc_score(flat_true, flat_scores),
+        pr_auc=average_precision_score(flat_true, flat_scores)
+    )
 
-    return {"Overall ROC AUC": roc_auc, "Overall PR AUC": pr_auc}
 
-
-def evaluate_binary_classification(y_true, y_pred):
-    # Ensure inputs are lists of 0s and 1s
-
-    # Confusion matrix: [[TN, FP], [FN, TP]]
+def evaluate_binary_classification(y_true: np.ndarray, y_pred: np.ndarray) -> BinaryMetrics:
+    """Evaluate binary classification predictions."""
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
 
-    # Precision: TP / (TP + FP)
-    precision = precision_score(y_true, y_pred, zero_division=0)
-
-    # Recall: TP / (TP + FN)
-    recall = recall_score(y_true, y_pred, zero_division=0)
-
-    return {
-        "TP": tp,
-        "TN": tn,
-        "FP": fp,
-        "FN": fn,
-        "Precision": precision,
-        "Recall": recall,
-    }
+    return BinaryMetrics(
+        true_positives=tp,
+        true_negatives=tn,
+        false_positives=fp,
+        false_negatives=fn,
+        precision=precision_score(y_true, y_pred, zero_division=0),
+        recall=recall_score(y_true, y_pred, zero_division=0)
+    )
 
 
-def plot_curves_with_thresholds_and_markers(
-    list_of_y_true, list_of_y_scores, split="", confidence="", max_labels=10
-):
-    # Flatten all true labels and scores
-    all_y_true = [label for sublist in list_of_y_true for label in sublist]
-    all_y_scores = [score for sublist in list_of_y_scores for score in sublist]
+def plot_performance_curves(
+    y_true: List[List[int]],
+    y_scores: List[List[float]],
+    split: str = "",
+    confidence_label: str = "",
+    threshold_markers: List[float] = [0.1, 0.3, 0.5, 0.65, 0.8, 0.9, 0.95, 1.0]
+) -> None:
+    """Plot ROC and PR curves with threshold markers."""
+    flat_true = np.concatenate(y_true)
+    flat_scores = np.concatenate(y_scores)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
     # ROC curve
-    fpr, tpr, roc_thresholds = roc_curve(all_y_true, all_y_scores)
-    roc_auc = roc_auc_score(all_y_true, all_y_scores)
+    fpr, tpr, roc_thresholds = roc_curve(flat_true, flat_scores)
+    roc_auc = roc_auc_score(flat_true, flat_scores)
+
+    ax1.plot(fpr, tpr, label=f"ROC AUC = {roc_auc:.3f}", lw=2)
+    ax1.plot([0, 1], [0, 1], "k--", label="Random")
+    _add_threshold_markers(ax1, fpr, tpr, roc_thresholds, threshold_markers)
+
+    ax1.set(xlabel="False Positive Rate",
+            ylabel="True Positive Rate",
+            title=f"{split}: ROC Curve{confidence_label}")
+    ax1.grid()
+    ax1.legend()
 
     # PR curve
-    precision, recall, pr_thresholds = precision_recall_curve(all_y_true, all_y_scores)
-    pr_auc = average_precision_score(all_y_true, all_y_scores)
+    precision, recall, pr_thresholds = precision_recall_curve(flat_true, flat_scores)
+    pr_auc = average_precision_score(flat_true, flat_scores)
 
-    # Plot
-    plt.figure(figsize=(14, 6))
+    ax2.plot(recall, precision, label=f"PR AUC = {pr_auc:.3f}", lw=2)
+    _add_threshold_markers(ax2, recall, precision, pr_thresholds, threshold_markers)
 
-    # ROC plot
-    plt.subplot(1, 2, 1)
-    plt.plot(fpr, tpr, label=f"ROC AUC = {roc_auc:.3f}", lw=2)
-    plt.plot([0, 1], [0, 1], "k--", label="Random")
-
-    # Annotate thresholds and mark points
-    annotate_threshold_markers(fpr, tpr, roc_thresholds)
-
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title(f"{split}:  ROC Curve{confidence}")
-    plt.legend()
-    plt.grid()
-
-    # PR plot
-    plt.subplot(1, 2, 2)
-    plt.plot(recall, precision, label=f"PR AUC = {pr_auc:.3f}", lw=2)
-
-    # Annotate thresholds and mark points
-    annotate_threshold_markers(recall, precision, pr_thresholds)
-
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title(f"{split}:  Precision-Recall Curve{confidence}")
-    plt.ylim([0.75, 1.02])
-    plt.legend()
-    plt.grid()
+    ax2.set(xlabel="Recall",
+            ylabel="Precision",
+            title=f"{split}: Precision-Recall Curve{confidence_label}",
+            ylim=[0.75, 1.02])
+    ax2.grid()
+    ax2.legend()
 
     plt.tight_layout()
-    plt.pause(0.5)
     plt.show(block=False)
 
 
-def annotate_threshold_markers(
-    x_coords,
-    y_coords,
-    thresholds,
-    target_thresholds=[0.1, 0.3, 0.5, 0.65, 0.8, 0.9, 0.95, 1.0],
-):
-    """
-    Annotate points on a plot for threshold values closest to target_thresholds.
-
-    Args:
-        x_coords: x-coordinates for plotting (e.g., fpr or recall)
-        y_coords: y-coordinates for plotting (e.g., tpr or precision)
-        thresholds: threshold values from ROC or PR curve
-        target_thresholds: list of threshold values we want to highlight
-    """
+def _add_threshold_markers(ax: plt.Axes,
+                         x_coords: np.ndarray,
+                         y_coords: np.ndarray,
+                         thresholds: np.ndarray,
+                         target_thresholds: List[float]) -> None:
+    """Add threshold markers to plot."""
     for target in target_thresholds:
-        # Find index of closest threshold value
-        idx = min(range(len(thresholds)), key=lambda i: abs(thresholds[i] - target))
-
-        # Plot marker and annotate
-        plt.plot(x_coords[idx], y_coords[idx], "ro")  # red dot
-        plt.text(
-            x_coords[idx],
-            y_coords[idx],
-            f"{thresholds[idx]:.2f}",
-            fontsize=8,
-            ha="right",
-        )
+        idx = np.abs(thresholds - target).argmin()
+        ax.plot(x_coords[idx], y_coords[idx], "ro")
+        ax.annotate(f"{thresholds[idx]:.2f}",
+                   (x_coords[idx], y_coords[idx]),
+                   fontsize=8,
+                   ha="right")
 
 
-def process_audio(audio, speech_detector):
-    """Returns VAD computed speech probabilities from audio chunks."""
-    speech_detector.reset()
-    chunk_size = speech_detector.chunk_size
-    num_chunks = len(audio) // chunk_size
+def process_audio(audio: np.ndarray, detector: SpeechDetector) -> List[float]:
+    """Process audio chunks and return VAD probabilities."""
+    detector.reset()
+    chunk_size = detector.chunk_size
     return [
-        speech_detector(audio[i * chunk_size : (i + 1) * chunk_size])
-        for i in range(num_chunks)
+        detector(audio[i:i + chunk_size])
+        for i in range(0, (len(audio) // chunk_size) * chunk_size, chunk_size)
     ]
 
 
 def main():
-    dataset = load_dataset("guynich/librispeech_asr_test_vad")
+    SPLITS = ["test.clean", "test.other"]
+    VAD_THRESHOLD = 0.5
 
+    dataset = load_dataset("guynich/librispeech_asr_test_vad")
+    detector = SpeechDetector()
     results = {}
-    separator = "=" * 80
 
     for split in SPLITS:
-        all_speech = []
-        all_vad_probs = []
+        all_speech, all_vad_probs = [], []
+        confident_speech, confident_vad_probs = [], []
 
-        all_speech_confidence = []
-        all_vad_probs_confidence = []
-
-        for index, example in enumerate(dataset[split]):
+        for idx, example in enumerate(dataset[split]):
             speech = example["speech"]
-            confidence = example["confidence"]
-            speech_confidence = np.array(speech)[np.array(confidence) == 1]
+            confidence = np.array(example["confidence"])
+            vad_probs = process_audio(example["audio"]["array"], detector)
 
-            vad_probs = process_audio(example["audio"]["array"], speech_detector)
-            vad_probs_confidence = np.array(vad_probs)[np.array(confidence) == 1]
-
+            # Store all results and confidence-filtered results
             all_speech.append(speech)
             all_vad_probs.append(vad_probs)
 
-            all_speech_confidence.append(speech_confidence)
-            all_vad_probs_confidence.append(vad_probs_confidence)
+            confident_mask = confidence == 1
+            confident_speech.append(np.array(speech)[confident_mask])
+            confident_vad_probs.append(np.array(vad_probs)[confident_mask])
 
-            # Apply a threshold to vad model probabilities.
-            vad_speech = np.array(vad_probs) > VAD_THRESHOLD
-            vad_speech_confidence = np.array(vad_probs_confidence) > VAD_THRESHOLD
-            metrics = evaluate_binary_classification(speech, vad_speech)
-            metrics_confidence = evaluate_binary_classification(
-                speech_confidence, vad_speech_confidence
+            # Evaluate predictions for fixed threshold
+            metrics = evaluate_binary_classification(
+                np.array(speech),
+                np.array(vad_probs) > VAD_THRESHOLD
             )
 
-            print(
-                f"Example: [{index:04d}]  Split: {split}",  #  Ratio: {ratio:7.2%}  "
+            confident_metrics = evaluate_binary_classification(
+                confident_speech[-1],
+                confident_vad_probs[-1] > VAD_THRESHOLD
             )
+
+            print(f"\nExample: [{idx:04d}]  Split: {split}")
+            print("All data metrics:")
             pprint.pprint(metrics)
-            print("Excluding low confidence:")
-            pprint.pprint(metrics_confidence)
+            print("Data metrics excluding low confidence features:")
+            pprint.pprint(confident_metrics)
 
+        # Compute and plot overall results
         results[split] = compute_overall_auc(all_speech, all_vad_probs)
-        results[split + "_confidence"] = compute_overall_auc(
-            all_speech_confidence, all_vad_probs_confidence
+        results[f"{split}_confidence"] = compute_overall_auc(
+            confident_speech, confident_vad_probs
         )
-        pprint.pprint(results)
-        print(separator)
 
-        # plot_overall_curves(all_speech, all_vad_probs)
-        plot_curves_with_thresholds_and_markers(all_speech, all_vad_probs, split=split)
-        plot_curves_with_thresholds_and_markers(
-            all_speech_confidence,
-            all_vad_probs_confidence,
+        plot_performance_curves(all_speech, all_vad_probs, split=split)
+        plot_performance_curves(
+            confident_speech,
+            confident_vad_probs,
             split=split,
-            confidence=" (exclude low confidence)",
+            confidence_label=" (exclude low confidence)"
         )
 
-    print("Press any key to quit.")
-    input()
+    print("\nOverall results:")
+    pprint.pprint(results)
+    input("Press Enter to quit.")
 
 
 if __name__ == "__main__":
-    speech_detector = SpeechDetector()
     main()
