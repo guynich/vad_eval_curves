@@ -71,12 +71,20 @@ for discussion.
 <img src="images/ROC_test_other_exclude_low_confidence.png" alt="AUC plots for test.clean excluding zero confidence data"/>
 
 ```
-{'test.clean': AUCMetrics(roc_auc=np.float64(0.9749639873286956),
-                          pr_auc=np.float64(0.9916533637164553)),
- 'test.clean_confidence': AUCMetrics(roc_auc=np.float64(0.992260886130102),
-                                     pr_auc=np.float64(0.9982586011226073)),
- 'test.other': AUCMetrics(roc_auc=np.float64(0.9690341897727688),
-                          pr_auc=np.float64(0.9856187361132123)),
- 'test.other_confidence': AUCMetrics(roc_auc=np.float64(0.9914300840606078),
-                                     pr_auc=np.float64(0.9971949276641505))}
+Overall results:
+{'test.clean': AUCMetrics(roc_auc=np.float64(0.9749640109150584),
+                          pr_auc=np.float64(0.9916534112871564)),
+ 'test.clean_confidence': AUCMetrics(roc_auc=np.float64(0.9922608881991464),
+                                     pr_auc=np.float64(0.998258606740065)),
+ 'test.clean_confidence_count': 565340,
+ 'test.clean_count': 606609,
+ 'test.other': AUCMetrics(roc_auc=np.float64(0.9690341904686337),
+                          pr_auc=np.float64(0.9856188107560578)),
+ 'test.other_confidence': AUCMetrics(roc_auc=np.float64(0.9914300825284824),
+                                     pr_auc=np.float64(0.9971949352151593)),
+ 'test.other_confidence_count': 555324,
+ 'test.other_count': 599505}
+
+test.clean has 5.39 hours of active speech with 93.20% labelled confidence 1
+test.other has 5.33 hours of active speech with 92.63% labelled confidence 1
 ```
